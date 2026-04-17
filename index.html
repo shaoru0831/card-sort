@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>「盯事儿」功能优先级卡片分类</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+    background: #f5f5f7; color: #1d1d1f; min-height: 100vh; padding: 24px;
+  }
+  .header { text-align: center; margin-bottom: 24px; }
+  .header h1 { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+  .header p { font-size: 14px; color: #86868b; line-height: 1.6; }
+
+  /* ===== 用户信息表单 ===== */
+  .user-form {
+    max-width: 520px; margin: 0 auto 32px; background: #fff;
+    border-radius: 16px; padding: 28px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .user-form h2 { font-size: 17px; font-weight: 600; margin-bottom: 16px; text-align: center; }
+  .form-row { margin-bottom: 16px; }
+  .form-row label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 6px; }
+  .form-row input, .form-row select {
+    width: 100%; padding: 10px 12px; border: 1.5px solid #e5e5ea; border-radius: 10px;
+    font-size: 14px; background: #fafafa; outline: none; transition: border-color 0.2s;
+  }
+  .form-row input:focus, .form-row select:focus { border-color: #007aff; }
+  .form-row .hint { font-size: 12px; color: #aeaeb2; margin-top: 4px; }
+
+  /* ===== 进度条 ===== */
+  .progress-bar { max-width: 600px; margin: 0 auto 28px; background: #e5e5ea; border-radius: 4px; height: 6px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, #34c759, #30d158); border-radius: 4px; transition: width 0.4s ease; }
+  .progress-text { text-align: center; font-size: 13px; color: #86868b; margin-bottom: 20px; }
+
+  /* ===== 主布局 ===== */
+  .layout { max-width: 960px; margin: 0 auto; display: none; flex-direction: column; gap: 24px; }
+  .card-pool { background: #fff; border-radius: 16px; padding: 20px; min-height: 80px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .card-pool-label { font-size: 13px; color: #86868b; margin-bottom: 12px; text-align: center; }
+  .card-pool .cards { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; min-height: 48px; }
+
+  .buckets { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .bucket { border-radius: 16px; padding: 16px; min-height: 200px; transition: background 0.2s, box-shadow 0.2s; }
+  .bucket.drag-over { box-shadow: 0 0 0 2px rgba(0,122,255,0.5); }
+  .bucket-must { background: linear-gradient(135deg, #fff5f5, #ffe8e8); border: 1.5px solid #ffcdd2; }
+  .bucket-nice { background: linear-gradient(135deg, #fff8e1, #fff3cd); border: 1.5px solid #ffe082; }
+  .bucket-meh  { background: linear-gradient(135deg, #f5f5f5, #eeeeee); border: 1.5px solid #e0e0e0; }
+
+  .bucket-header { text-align: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid rgba(0,0,0,0.06); }
+  .bucket-header .emoji { font-size: 24px; }
+  .bucket-header .title { font-size: 15px; font-weight: 600; margin-top: 4px; }
+  .bucket-header .desc { font-size: 12px; color: #86868b; margin-top: 2px; }
+  .bucket .cards { display: flex; flex-direction: column; gap: 8px; min-height: 60px; }
+  .bucket .count { text-align: center; font-size: 12px; color: #aeaeb2; margin-top: 8px; }
+
+  /* ===== 卡片 ===== */
+  .card {
+    background: #fff; border: 1.5px solid #e5e5ea; border-radius: 12px; padding: 12px 14px;
+    font-size: 14px; line-height: 1.5; cursor: grab; user-select: none;
+    transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+    display: flex; align-items: flex-start; gap: 10px; position: relative;
+  }
+  .card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  .card:active, .card.dragging { cursor: grabbing; opacity: 0.7; transform: scale(0.97); }
+  .card .card-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+  .card .card-text { flex: 1; }
+  .card .card-label { font-size: 11px; color: #aeaeb2; margin-top: 3px; }
+  .bucket-must .card { border-color: #ef9a9a; }
+  .bucket-nice .card { border-color: #ffe082; }
+  .bucket-meh .card  { border-color: #e0e0e0; }
+
+  /* ===== 结果面板 ===== */
+  .result-panel { display: none; max-width: 960px; margin: 0 auto; background: #fff; border-radius: 16px; padding: 32px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+  .result-panel h2 { font-size: 20px; font-weight: 600; margin-bottom: 20px; text-align: center; }
+  .result-section { margin-bottom: 20px; }
+  .result-section h3 { font-size: 15px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .result-item { padding: 8px 12px; background: #f9f9f9; border-radius: 8px; margin-bottom: 6px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+
+  /* ===== 数据管理面板 ===== */
+  .admin-panel {
+    display: none; max-width: 960px; margin: 32px auto 0; background: #fff;
+    border-radius: 16px; padding: 28px; box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  }
+  .admin-panel h2 { font-size: 18px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  .admin-toggle {
+    position: fixed; bottom: 20px; right: 20px; background: #1d1d1f; color: #fff;
+    border: none; border-radius: 50%; width: 44px; height: 44px; font-size: 18px;
+    cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .admin-toggle:hover { background: #333; }
+  .record-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
+  .record-table th { background: #f5f5f7; padding: 8px 10px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e5ea; }
+  .record-table td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; }
+  .record-table tr:hover td { background: #fafafa; }
+  .tag-must { background: #ffebee; color: #c62828; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin: 1px; display: inline-block; }
+  .tag-nice { background: #fff8e1; color: #f57f17; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin: 1px; display: inline-block; }
+  .tag-meh  { background: #f5f5f5; color: #757575; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin: 1px; display: inline-block; }
+  .empty-state { text-align: center; padding: 32px; color: #aeaeb2; font-size: 14px; }
+
+  /* ===== 按钮 ===== */
+  .btn-row { text-align: center; margin-top: 24px; }
+  .btn { display: inline-block; padding: 12px 28px; border-radius: 12px; border: none; font-size: 15px; font-weight: 500; cursor: pointer; transition: all 0.2s; margin: 4px; }
+  .btn-primary { background: #007aff; color: #fff; }
+  .btn-primary:hover { background: #0066d6; }
+  .btn-primary:disabled { background: #c7c7cc; cursor: not-allowed; }
+  .btn-secondary { background: #e5e5ea; color: #1d1d1f; }
+  .btn-secondary:hover { background: #d1d1d6; }
+  .btn-danger { background: #ff3b30; color: #fff; }
+  .btn-danger:hover { background: #d63029; }
+  .btn-sm { padding: 8px 16px; font-size: 13px; border-radius: 8px; }
+
+  .copy-hint { text-align: center; font-size: 13px; color: #34c759; margin-top: 8px; opacity: 0; transition: opacity 0.3s; }
+  .copy-hint.show { opacity: 1; }
+
+  .feishu-text {
+    background: #f5f5f7; border-radius: 8px; padding: 16px; font-size: 13px;
+    line-height: 1.8; white-space: pre-wrap; word-break: break-all;
+    max-height: 160px; overflow-y: auto; margin-top: 12px; color: #555;
+  }
+
+  .saved-badge {
+    display: inline-block; background: #34c759; color: #fff; font-size: 12px;
+    padding: 4px 12px; border-radius: 20px; margin-left: 8px;
+    animation: fadeInOut 2s ease forwards;
+  }
+  @keyframes fadeInOut { 0%{opacity:0} 20%{opacity:1} 80%{opacity:1} 100%{opacity:0} }
+
+  @media (max-width: 700px) {
+    body { padding: 16px; }
+    .buckets { grid-template-columns: 1fr; }
+    .bucket { min-height: 120px; }
+    .card { font-size: 13px; padding: 10px 12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== 用户信息表单 ===== -->
+<div class="header">
+  <h1>📋 功能优先级卡片分类</h1>
+  <p>假设手机上有一个「帮你盯事儿」的智能助手，<br>请把功能卡片拖到你觉得合适的分类里</p>
+</div>
+
+<div class="user-form" id="userForm">
+  <h2>先简单认识一下你 👋</h2>
+  <div class="form-row">
+    <label>你的称呼</label>
+    <input type="text" id="userName" placeholder="昵称或编号都行，比如「用户03」">
+  </div>
+  <div class="form-row">
+    <label>年龄段</label>
+    <select id="userAge">
+      <option value="">请选择</option>
+      <option value="18-24">18-24 岁</option>
+      <option value="25-30">25-30 岁</option>
+      <option value="31-40">31-40 岁</option>
+      <option value="40+">40 岁以上</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label>家庭情况</label>
+    <select id="userFamily">
+      <option value="">请选择</option>
+      <option value="单身/恋爱">单身 / 恋爱中</option>
+      <option value="已婚无孩">已婚无孩</option>
+      <option value="有学龄前孩子">有学龄前孩子（0-6岁）</option>
+      <option value="有学龄孩子">有学龄孩子（7岁+）</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label>工作类型</label>
+    <select id="userJob">
+      <option value="">请选择</option>
+      <option value="研发">研发</option>
+      <option value="产品">产品</option>
+      <option value="运营">运营</option>
+      <option value="职能">职能（HR/财务/行政等）</option>
+      <option value="学生">学生</option>
+      <option value="自由职业">自由职业</option>
+      <option value="其他">其他</option>
+    </select>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-primary" id="startBtn" onclick="startSort()">开始分类 →</button>
+  </div>
+</div>
+
+<!-- ===== 分类主界面 ===== -->
+<div class="progress-text" id="progressText" style="display:none"></div>
+<div class="progress-bar" style="display:none" id="progressBar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+
+<div class="layout" id="mainLayout">
+  <div class="card-pool" id="pool">
+    <div class="card-pool-label">👇 把卡片拖到下方三个分类中</div>
+    <div class="cards" id="poolCards"></div>
+  </div>
+  <div class="buckets">
+    <div class="bucket bucket-must" id="bucketMust" data-bucket="must">
+      <div class="bucket-header"><div class="emoji">🔴</div><div class="title">没有不行</div><div class="desc">缺了这个我不会用</div></div>
+      <div class="cards" id="mustCards"></div><div class="count" id="mustCount"></div>
+    </div>
+    <div class="bucket bucket-nice" id="bucketNice" data-bucket="nice">
+      <div class="bucket-header"><div class="emoji">🟡</div><div class="title">有了更好</div><div class="desc">加分项，但不是必须</div></div>
+      <div class="cards" id="niceCards"></div><div class="count" id="niceCount"></div>
+    </div>
+    <div class="bucket bucket-meh" id="bucketMeh" data-bucket="meh">
+      <div class="bucket-header"><div class="emoji">⚪</div><div class="title">无所谓</div><div class="desc">有没有都行</div></div>
+      <div class="cards" id="mehCards"></div><div class="count" id="mehCount"></div>
+    </div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-primary" id="submitBtn" disabled onclick="showResult()">提交分类结果</button>
+  </div>
+</div>
+
+<!-- ===== 结果面板 ===== -->
+<div class="result-panel" id="resultPanel">
+  <h2>✅ 分类完成！<span id="savedBadge"></span></h2>
+  <div class="result-section" id="resultMust"></div>
+  <div class="result-section" id="resultNice"></div>
+  <div class="result-section" id="resultMeh"></div>
+  <div style="margin-top:20px">
+    <div style="font-size:14px;font-weight:600;margin-bottom:8px">📋 可直接粘贴到飞书表格：</div>
+    <div class="feishu-text" id="feishuText"></div>
+  </div>
+  <div class="copy-hint" id="copyHint">已复制到剪贴板 ✓</div>
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="copyFeishu()">复制飞书文本</button>
+    <button class="btn btn-secondary" onclick="resetAll()">下一位用户</button>
+  </div>
+</div>
+
+<!-- ===== 研究员管理面板（右下角按钮唤出） ===== -->
+<button class="admin-toggle" id="adminToggle" onclick="toggleAdmin()" title="数据管理">📊</button>
+<div class="admin-panel" id="adminPanel">
+  <h2>📊 已收集的数据 <span id="recordCount" style="font-size:14px;color:#86868b;font-weight:400"></span></h2>
+  <div id="recordsContainer"></div>
+  <div class="btn-row" id="adminBtns" style="display:none">
+    <button class="btn btn-primary btn-sm" onclick="exportCSV()">📥 导出 CSV</button>
+    <button class="btn btn-secondary btn-sm" onclick="exportJSON()">📥 导出 JSON</button>
+    <button class="btn btn-danger btn-sm" onclick="clearAll()">🗑️ 清空所有数据</button>
+  </div>
+</div>
+
+<script>
+const CARDS = [
+  { id:"A", icon:"👁️", text:"打开就能一眼看到：我现在有哪些事要做", label:"全貌总览" },
+  { id:"B", icon:"🎙️", text:"脑子里突然想到一件事，说一句话就能记下来", label:"快速记录" },
+  { id:"C", icon:"📩", text:"收到短信或系统通知后，它自动帮我记成待办", label:"通知抓取" },
+  { id:"D", icon:"💬", text:"微信/飞书里别人跟我说的事，它自动帮我记下来", label:"聊天抓取" },
+  { id:"E", icon:"⏰", text:"在我该做某件事的时候，主动提醒我", label:"智能提醒" },
+  { id:"F", icon:"🧩", text:"一件复杂的事，它帮我拆成具体步骤，告诉我先做什么", label:"拆解步骤" },
+  { id:"G", icon:"🔗", text:"我在做一件事时，它提醒我「顺便把另一件相关的也办了」", label:"关联发现" },
+  { id:"H", icon:"✨", text:"根据我的兴趣，主动推荐我可能感兴趣的内容或活动", label:"主动推荐" },
+  { id:"I", icon:"🤖", text:"帮我自动完成一些简单操作，比如缴费、抢票", label:"自动执行" },
+  { id:"J", icon:"📊", text:"每周帮我回顾：这周做了什么、完成了多少、还剩什么", label:"回顾总结" },
+  { id:"K", icon:"🛡️", text:"以上所有功能，记得准、提醒及时、不出错", label:"质量可靠" },
+];
+
+const STORAGE_KEY = "cardSortRecords";
+let draggedCard = null;
+let currentUser = {};
+
+// ===== 用户信息 & 开始 =====
+function startSort() {
+  const name = document.getElementById("userName").value.trim();
+  const age = document.getElementById("userAge").value;
+  const family = document.getElementById("userFamily").value;
+  const job = document.getElementById("userJob").value;
+  if (!name) { alert("请填写称呼"); return; }
+  currentUser = { name, age, family, job };
+  document.getElementById("userForm").style.display = "none";
+  document.getElementById("progressText").style.display = "block";
+  document.getElementById("progressBar").style.display = "block";
+  document.getElementById("mainLayout").style.display = "flex";
+  initCards();
+}
+
+// ===== 卡片初始化 =====
+function initCards() {
+  const pool = document.getElementById("poolCards");
+  pool.innerHTML = "";
+  const shuffled = [...CARDS].sort(() => Math.random() - 0.5);
+  shuffled.forEach(c => pool.appendChild(createCardEl(c)));
+  setupDropZones();
+  updateProgress();
+}
+
+function createCardEl(card) {
+  const el = document.createElement("div");
+  el.className = "card"; el.draggable = true; el.dataset.id = card.id;
+  el.innerHTML = `<span class="card-icon">${card.icon}</span><div><div class="card-text">${card.text}</div><div class="card-label">${card.label}</div></div>`;
+
+  // 桌面拖拽
+  el.addEventListener("dragstart", e => { draggedCard = el; el.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; });
+  el.addEventListener("dragend", () => { el.classList.remove("dragging"); draggedCard = null; document.querySelectorAll(".bucket").forEach(b => b.classList.remove("drag-over")); });
+
+  // 触摸拖拽
+  let touchClone = null;
+  el.addEventListener("touchstart", e => {
+    draggedCard = el;
+    const t = e.touches[0];
+    touchClone = el.cloneNode(true);
+    Object.assign(touchClone.style, { position:"fixed", zIndex:"9999", width:el.offsetWidth+"px", opacity:"0.85", pointerEvents:"none", transform:"scale(1.05) rotate(2deg)", boxShadow:"0 8px 24px rgba(0,0,0,0.15)" });
+    document.body.appendChild(touchClone);
+    moveTouchClone(t);
+    el.style.opacity = "0.3";
+  }, { passive: true });
+
+  el.addEventListener("touchmove", e => {
+    e.preventDefault();
+    const t = e.touches[0];
+    if (touchClone) moveTouchClone(t);
+    document.querySelectorAll(".bucket").forEach(b => {
+      const r = b.getBoundingClientRect();
+      b.classList.toggle("drag-over", t.clientX >= r.left && t.clientX <= r.right && t.clientY >= r.top && t.clientY <= r.bottom);
+    });
+  }, { passive: false });
+
+  el.addEventListener("touchend", e => {
+    if (touchClone) { touchClone.remove(); touchClone = null; }
+    el.style.opacity = "1";
+    const t = e.changedTouches[0];
+    let dropped = false;
+    document.querySelectorAll(".bucket").forEach(b => {
+      const r = b.getBoundingClientRect();
+      if (t.clientX >= r.left && t.clientX <= r.right && t.clientY >= r.top && t.clientY <= r.bottom) {
+        b.querySelector(".cards").appendChild(el); dropped = true;
+      }
+      b.classList.remove("drag-over");
+    });
+    if (!dropped) {
+      const pr = document.getElementById("pool").getBoundingClientRect();
+      if (t.clientX >= pr.left && t.clientX <= pr.right && t.clientY >= pr.top && t.clientY <= pr.bottom)
+        document.getElementById("poolCards").appendChild(el);
+    }
+    draggedCard = null; updateProgress();
+  });
+  return el;
+}
+
+function moveTouchClone(t) { if (!touchClone) return; touchClone.style.left = (t.clientX-140)+"px"; touchClone.style.top = (t.clientY-30)+"px"; }
+var touchClone = null; // hoist for touchmove
+
+function setupDropZones() {
+  [...document.querySelectorAll(".bucket"), document.getElementById("pool")].forEach(zone => {
+    zone.addEventListener("dragover", e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (zone.classList.contains("bucket")) zone.classList.add("drag-over"); });
+    zone.addEventListener("dragleave", () => zone.classList.remove("drag-over"));
+    zone.addEventListener("drop", e => {
+      e.preventDefault(); zone.classList.remove("drag-over"); if (!draggedCard) return;
+      (zone.id === "pool" ? document.getElementById("poolCards") : zone.querySelector(".cards")).appendChild(draggedCard);
+      updateProgress();
+    });
+  });
+}
+
+function updateProgress() {
+  const poolCount = document.getElementById("poolCards").children.length;
+  const pct = Math.round(((11 - poolCount) / 11) * 100);
+  document.getElementById("progressFill").style.width = pct + "%";
+  document.getElementById("progressText").innerHTML = poolCount > 0 ? `还有 <strong>${poolCount}</strong> 张卡片待分类` : `🎉 全部分类完成！`;
+  document.getElementById("submitBtn").disabled = poolCount > 0;
+  ["must","nice","meh"].forEach(b => {
+    const c = document.getElementById(b+"Cards").children.length;
+    document.getElementById(b+"Count").textContent = c > 0 ? c+" 项" : "";
+  });
+}
+
+// ===== 提交结果 =====
+function getResults() {
+  const r = { must:[], nice:[], meh:[] };
+  ["must","nice","meh"].forEach(b => {
+    document.getElementById(b+"Cards").querySelectorAll(".card").forEach(c => {
+      const card = CARDS.find(x => x.id === c.dataset.id);
+      r[b].push({ id: card.id, label: card.label });
+    });
+  });
+  return r;
+}
+
+function showResult() {
+  const result = getResults();
+  // 保存到 localStorage
+  const record = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    timestamp: new Date().toISOString(),
+    user: currentUser,
+    must: result.must.map(i => i.id),
+    nice: result.nice.map(i => i.id),
+    meh: result.meh.map(i => i.id),
+  };
+  saveRecord(record);
+
+  // 发送到飞书群
+  sendToFeishu(record, result);
+
+  // 隐藏主界面，显示结果
+  document.getElementById("mainLayout").style.display = "none";
+  document.getElementById("progressText").style.display = "none";
+  document.getElementById("progressBar").style.display = "none";
+  document.getElementById("resultPanel").style.display = "block";
+  document.getElementById("savedBadge").innerHTML = '<span class="saved-badge">✓ 已自动保存</span>';
+
+  // 渲染结果
+  [{ key:"must", el:"resultMust", emoji:"🔴", title:"没有不行" },
+   { key:"nice", el:"resultNice", emoji:"🟡", title:"有了更好" },
+   { key:"meh",  el:"resultMeh",  emoji:"⚪", title:"无所谓" }].forEach(s => {
+    const container = document.getElementById(s.el);
+    container.innerHTML = `<h3>${s.emoji} ${s.title}（${result[s.key].length} 项）</h3>`;
+    if (result[s.key].length === 0) {
+      container.innerHTML += `<div class="result-item" style="color:#aeaeb2">（空）</div>`;
+    } else {
+      result[s.key].forEach(item => {
+        const c = CARDS.find(x => x.id === item.id);
+        container.innerHTML += `<div class="result-item"><span>${c.icon}</span><span>${c.text}</span></div>`;
+      });
+    }
+  });
+
+  // 生成飞书可粘贴文本（Tab 分隔，直接粘贴到飞书表格）
+  const mustIds = result.must.map(i => i.id + " " + i.label).join("、");
+  const niceIds = result.nice.map(i => i.id + " " + i.label).join("、");
+  const mehIds  = result.meh.map(i => i.id + " " + i.label).join("、");
+  const feishu = [
+    currentUser.name, currentUser.age, currentUser.family, currentUser.job,
+    mustIds, niceIds, mehIds,
+    result.must.length, result.nice.length, result.meh.length,
+    new Date().toLocaleString("zh-CN")
+  ].join("\t");
+  document.getElementById("feishuText").textContent =
+    "称呼\t年龄段\t家庭\t工作\t🔴没有不行\t🟡有了更好\t⚪无所谓\t🔴数量\t🟡数量\t⚪数量\t时间\n" + feishu;
+}
+
+// ===== 数据存储 =====
+function saveRecord(record) {
+  const records = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+  records.push(record);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+}
+function getRecords() { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
+
+// ===== 飞书 Webhook 数据回收 =====
+const FEISHU_WEBHOOK = "https://open.feishu.cn/open-apis/bot/v2/hook/66d6cf89-d78b-454d-90a8-c17829958545";
+
+function sendToFeishu(record, result) {
+  const labelMap = {}; CARDS.forEach(c => labelMap[c.id] = c.icon + " " + c.label);
+  const mustStr = record.must.map(id => labelMap[id]).join("\n") || "（空）";
+  const niceStr = record.nice.map(id => labelMap[id]).join("\n") || "（空）";
+  const mehStr  = record.meh.map(id => labelMap[id]).join("\n") || "（空）";
+  const time = new Date(record.timestamp).toLocaleString("zh-CN");
+
+  const content = {
+    msg_type: "interactive",
+    card: {
+      header: {
+        title: { tag: "plain_text", content: "📋 新的卡片分类结果" },
+        template: "blue"
+      },
+      elements: [
+        {
+          tag: "div",
+          fields: [
+            { is_short: true, text: { tag: "lark_md", content: "**👤 称呼**\n" + (record.user.name || "-") } },
+            { is_short: true, text: { tag: "lark_md", content: "**🎂 年龄**\n" + (record.user.age || "-") } },
+            { is_short: true, text: { tag: "lark_md", content: "**👨‍👩‍👧 家庭**\n" + (record.user.family || "-") } },
+            { is_short: true, text: { tag: "lark_md", content: "**💼 工作**\n" + (record.user.job || "-") } },
+          ]
+        },
+        { tag: "hr" },
+        {
+          tag: "div",
+          text: { tag: "lark_md", content: "**🔴 没有不行（" + record.must.length + " 项）**\n" + mustStr }
+        },
+        {
+          tag: "div",
+          text: { tag: "lark_md", content: "**🟡 有了更好（" + record.nice.length + " 项）**\n" + niceStr }
+        },
+        {
+          tag: "div",
+          text: { tag: "lark_md", content: "**⚪ 无所谓（" + record.meh.length + " 项）**\n" + mehStr }
+        },
+        { tag: "hr" },
+        {
+          tag: "note",
+          elements: [{ tag: "plain_text", content: "提交时间：" + time + " | ID: " + record.id }]
+        }
+      ]
+    }
+  };
+
+  fetch(FEISHU_WEBHOOK, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(content),
+  }).catch(err => console.warn("飞书发送失败（不影响本地保存）:", err));
+}
+
+// ===== 复制飞书文本 =====
+function copyFeishu() {
+  const text = document.getElementById("feishuText").textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const h = document.getElementById("copyHint"); h.classList.add("show"); setTimeout(() => h.classList.remove("show"), 2000);
+  });
+}
+
+// ===== 重置（下一位用户） =====
+function resetAll() {
+  document.getElementById("resultPanel").style.display = "none";
+  document.getElementById("userForm").style.display = "block";
+  document.getElementById("userName").value = "";
+  document.getElementById("userAge").value = "";
+  document.getElementById("userFamily").value = "";
+  document.getElementById("userJob").value = "";
+  // 清空桶
+  const pool = document.getElementById("poolCards");
+  ["must","nice","meh"].forEach(b => {
+    const cards = document.getElementById(b+"Cards");
+    while (cards.firstChild) pool.appendChild(cards.firstChild);
+  });
+  currentUser = {};
+}
+
+// ===== 管理面板 =====
+function toggleAdmin() {
+  const panel = document.getElementById("adminPanel");
+  panel.style.display = panel.style.display === "none" ? "block" : "none";
+  if (panel.style.display === "block") renderRecords();
+}
+
+function renderRecords() {
+  const records = getRecords();
+  const container = document.getElementById("recordsContainer");
+  document.getElementById("recordCount").textContent = `共 ${records.length} 条`;
+  document.getElementById("adminBtns").style.display = records.length > 0 ? "block" : "none";
+
+  if (records.length === 0) {
+    container.innerHTML = '<div class="empty-state">还没有收集到数据</div>';
+    return;
+  }
+
+  const labelMap = {}; CARDS.forEach(c => labelMap[c.id] = c.label);
+  let html = '<table class="record-table"><thead><tr><th>称呼</th><th>年龄</th><th>家庭</th><th>工作</th><th>🔴 没有不行</th><th>🟡 有了更好</th><th>⚪ 无所谓</th><th>时间</th></tr></thead><tbody>';
+  records.forEach(r => {
+    const mustTags = r.must.map(id => `<span class="tag-must">${labelMap[id]||id}</span>`).join(" ");
+    const niceTags = r.nice.map(id => `<span class="tag-nice">${labelMap[id]||id}</span>`).join(" ");
+    const mehTags  = r.meh.map(id => `<span class="tag-meh">${labelMap[id]||id}</span>`).join(" ");
+    const time = new Date(r.timestamp).toLocaleString("zh-CN", { month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" });
+    html += `<tr><td>${r.user.name||"-"}</td><td>${r.user.age||"-"}</td><td>${r.user.family||"-"}</td><td>${r.user.job||"-"}</td><td>${mustTags||"-"}</td><td>${niceTags||"-"}</td><td>${mehTags||"-"}</td><td>${time}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+// ===== 导出 CSV =====
+function exportCSV() {
+  const records = getRecords();
+  const labelMap = {}; CARDS.forEach(c => labelMap[c.id] = c.label);
+  // 表头：用户信息 + 每个选项的分类结果
+  let csv = "称呼,年龄段,家庭,工作," + CARDS.map(c => c.id+"_"+c.label).join(",") + ",时间\n";
+  records.forEach(r => {
+    const row = [
+      '"'+(r.user.name||"")+'"', r.user.age||"", '"'+(r.user.family||"")+'"', r.user.job||"",
+    ];
+    CARDS.forEach(c => {
+      if (r.must.includes(c.id)) row.push("没有不行");
+      else if (r.nice.includes(c.id)) row.push("有了更好");
+      else if (r.meh.includes(c.id)) row.push("无所谓");
+      else row.push("");
+    });
+    row.push(new Date(r.timestamp).toLocaleString("zh-CN"));
+    csv += row.join(",") + "\n";
+  });
+
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url;
+  a.download = `卡片分类结果_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+// ===== 导出 JSON =====
+function exportJSON() {
+  const records = getRecords();
+  const blob = new Blob([JSON.stringify(records, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url;
+  a.download = `卡片分类结果_${new Date().toISOString().slice(0,10)}.json`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+// ===== 清空数据 =====
+function clearAll() {
+  if (!confirm("确定要清空所有已收集的数据吗？此操作不可恢复。")) return;
+  localStorage.removeItem(STORAGE_KEY);
+  renderRecords();
+}
+</script>
+</body>
+</html>
