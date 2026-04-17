@@ -146,8 +146,16 @@
 <div class="user-form" id="userForm">
   <h2>先简单认识一下你 👋</h2>
   <div class="form-row">
-    <label>你的称呼</label>
-    <input type="text" id="userName" placeholder="昵称或编号都行，比如「用户03」">
+    <label>你的姓名</label>
+    <input type="text" id="userName" placeholder="请输入你的姓名">
+  </div>
+  <div class="form-row">
+    <label>性别</label>
+    <select id="userGender">
+      <option value="">请选择</option>
+      <option value="男">男</option>
+      <option value="女">女</option>
+    </select>
   </div>
   <div class="form-row">
     <label>年龄段</label>
@@ -167,19 +175,6 @@
       <option value="已婚无孩">已婚无孩</option>
       <option value="有学龄前孩子">有学龄前孩子（0-6岁）</option>
       <option value="有学龄孩子">有学龄孩子（7岁+）</option>
-    </select>
-  </div>
-  <div class="form-row">
-    <label>工作类型</label>
-    <select id="userJob">
-      <option value="">请选择</option>
-      <option value="研发">研发</option>
-      <option value="产品">产品</option>
-      <option value="运营">运营</option>
-      <option value="职能">职能（HR/财务/行政等）</option>
-      <option value="学生">学生</option>
-      <option value="自由职业">自由职业</option>
-      <option value="其他">其他</option>
     </select>
   </div>
   <div class="btn-row">
@@ -268,9 +263,8 @@ function startSort() {
   const name = document.getElementById("userName").value.trim();
   const age = document.getElementById("userAge").value;
   const family = document.getElementById("userFamily").value;
-  const job = document.getElementById("userJob").value;
-  if (!name) { alert("请填写称呼"); return; }
-  currentUser = { name, age, family, job };
+  if (!name) { alert("请填写姓名"); return; }
+  currentUser = { name, gender: document.getElementById("userGender").value, age, family };
   document.getElementById("userForm").style.display = "none";
   document.getElementById("progressText").style.display = "block";
   document.getElementById("progressBar").style.display = "block";
@@ -424,13 +418,13 @@ function showResult() {
   const niceIds = result.nice.map(i => i.id + " " + i.label).join("、");
   const mehIds  = result.meh.map(i => i.id + " " + i.label).join("、");
   const feishu = [
-    currentUser.name, currentUser.age, currentUser.family, currentUser.job,
+    currentUser.name, currentUser.gender, currentUser.age, currentUser.family,
     mustIds, niceIds, mehIds,
     result.must.length, result.nice.length, result.meh.length,
     new Date().toLocaleString("zh-CN")
   ].join("\t");
   document.getElementById("feishuText").textContent =
-    "称呼\t年龄段\t家庭\t工作\t🔴没有不行\t🟡有了更好\t⚪无所谓\t🔴数量\t🟡数量\t⚪数量\t时间\n" + feishu;
+    "姓名\t性别\t年龄段\t家庭\t🔴没有不行\t🟡有了更好\t⚪无所谓\t🔴数量\t🟡数量\t⚪数量\t时间\n" + feishu;
 }
 
 // ===== 数据存储 =====
@@ -462,10 +456,10 @@ function sendToFeishu(record, result) {
         {
           tag: "div",
           fields: [
-            { is_short: true, text: { tag: "lark_md", content: "**👤 称呼**\n" + (record.user.name || "-") } },
+            { is_short: true, text: { tag: "lark_md", content: "**👤 姓名**\n" + (record.user.name || "-") } },
+            { is_short: true, text: { tag: "lark_md", content: "**⚧ 性别**\n" + (record.user.gender || "-") } },
             { is_short: true, text: { tag: "lark_md", content: "**🎂 年龄**\n" + (record.user.age || "-") } },
-            { is_short: true, text: { tag: "lark_md", content: "**👨‍👩‍👧 家庭**\n" + (record.user.family || "-") } },
-            { is_short: true, text: { tag: "lark_md", content: "**💼 工作**\n" + (record.user.job || "-") } },
+            { is_short: true, text: { tag: "lark_md", content: "**👨‍👩‍� 家庭**\n" + (record.user.family || "-") } },
           ]
         },
         { tag: "hr" },
@@ -510,9 +504,9 @@ function resetAll() {
   document.getElementById("resultPanel").style.display = "none";
   document.getElementById("userForm").style.display = "block";
   document.getElementById("userName").value = "";
+  document.getElementById("userGender").value = "";
   document.getElementById("userAge").value = "";
   document.getElementById("userFamily").value = "";
-  document.getElementById("userJob").value = "";
   // 清空桶
   const pool = document.getElementById("poolCards");
   ["must","nice","meh"].forEach(b => {
@@ -541,13 +535,13 @@ function renderRecords() {
   }
 
   const labelMap = {}; CARDS.forEach(c => labelMap[c.id] = c.label);
-  let html = '<table class="record-table"><thead><tr><th>称呼</th><th>年龄</th><th>家庭</th><th>工作</th><th>🔴 没有不行</th><th>🟡 有了更好</th><th>⚪ 无所谓</th><th>时间</th></tr></thead><tbody>';
+  let html = '<table class="record-table"><thead><tr><th>姓名</th><th>性别</th><th>年龄</th><th>家庭</th><th>🔴 没有不行</th><th>🟡 有了更好</th><th>⚪ 无所谓</th><th>时间</th></tr></thead><tbody>';
   records.forEach(r => {
     const mustTags = r.must.map(id => `<span class="tag-must">${labelMap[id]||id}</span>`).join(" ");
     const niceTags = r.nice.map(id => `<span class="tag-nice">${labelMap[id]||id}</span>`).join(" ");
     const mehTags  = r.meh.map(id => `<span class="tag-meh">${labelMap[id]||id}</span>`).join(" ");
     const time = new Date(r.timestamp).toLocaleString("zh-CN", { month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" });
-    html += `<tr><td>${r.user.name||"-"}</td><td>${r.user.age||"-"}</td><td>${r.user.family||"-"}</td><td>${r.user.job||"-"}</td><td>${mustTags||"-"}</td><td>${niceTags||"-"}</td><td>${mehTags||"-"}</td><td>${time}</td></tr>`;
+    html += `<tr><td>${r.user.name||"-"}</td><td>${r.user.gender||"-"}</td><td>${r.user.age||"-"}</td><td>${r.user.family||"-"}</td><td>${mustTags||"-"}</td><td>${niceTags||"-"}</td><td>${mehTags||"-"}</td><td>${time}</td></tr>`;
   });
   html += '</tbody></table>';
   container.innerHTML = html;
@@ -558,10 +552,10 @@ function exportCSV() {
   const records = getRecords();
   const labelMap = {}; CARDS.forEach(c => labelMap[c.id] = c.label);
   // 表头：用户信息 + 每个选项的分类结果
-  let csv = "称呼,年龄段,家庭,工作," + CARDS.map(c => c.id+"_"+c.label).join(",") + ",时间\n";
+  let csv = "姓名,性别,年龄段,家庭," + CARDS.map(c => c.id+"_"+c.label).join(",") + ",时间\n";
   records.forEach(r => {
     const row = [
-      '"'+(r.user.name||"")+'"', r.user.age||"", '"'+(r.user.family||"")+'"', r.user.job||"",
+      '"'+(r.user.name||"")+'"', r.user.gender||"", r.user.age||"", '"'+(r.user.family||"")+'"',
     ];
     CARDS.forEach(c => {
       if (r.must.includes(c.id)) row.push("没有不行");
